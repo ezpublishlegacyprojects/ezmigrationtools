@@ -8,7 +8,6 @@ class Task_ListDbs extends eZMigrationTask {
 	
 	
 	
-	
 	function run(& $dataSet){
 		
 		foreach ($dataSet['DBList'] as $siteaccess => $dbname) {

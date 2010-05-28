@@ -1,52 +1,11 @@
 <?php
-//
-// Definition of Task_DumpDBs class
-//
-// Created on: <17-Apr-2002 09:15:27 bf>
-//
-// SOFTWARE NAME: eZ Migration Tools extension for eZ Publish
-// SOFTWARE RELEASE: 0.1
-// SOFTWARE LICENSE: GNU General Public License v2.0
-// NOTICE: >
-//   This program is free software; you can redistribute it and/or
-//   modify it under the terms of version 2.0  of the GNU General
-//   Public License as published by the Free Software Foundation.
-//
-//   This program is distributed in the hope that it will be useful,
-//   but WITHOUT ANY WARRANTY; without even the implied warranty of
-//   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//   GNU General Public License for more details.
-//
-//   You should have received a copy of version 2.0 of the GNU General
-//   Public License along with this program; if not, write to the Free
-//   Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-//   MA 02110-1301, USA.
-//
-//
-
-/*!
-  \class Task_DumpDBs task_dumpdbs.php
-  
-  \brief dump task estends the migration task
-
-  This task is in charge of dumping all the databases found in the
-  settings.
-
-  if the ini parameter DumpDbBeforeUpgrade in the [DBMigrationSettings] section
-  of the migration.ini file is set to false, the dump will not be performed.
-
-*/
-
 
 class Task_DumpDBs extends eZMigrationTask {
 	
-	/**
-	 * Template script string. the fields will be replaced
-	 * with the parameters found in the settings
-	 *
-	 * @var string
-	 */
-	static $DUMP = "{mysqlPath}mysqldump -u{usr} -p{pwd} -h{hostname} --default_character_set utf8 {dbname} > {migrationDbDumpFolder}/{migrationDbDumpPrefix}{dbname}.sql";
+	
+	static $DUMP = "{mysqlPath}mysqldump -u{usr} -h {host} -p{pwd} --default_character_set utf8 {dbname} > {migrationDbDumpFolder}/{migrationDbDumpPrefix}{dbname}.sql";
+	
+	
 	
 	private $mysqlPath;
 	private $export;
@@ -78,10 +37,12 @@ class Task_DumpDBs extends eZMigrationTask {
 	
 	function dumpDbs($dbs,$prefix, $folder){
 		if ($this->export){
-			$this->write("\tStart dumping all databases.");	
+			$this->write("\tStart dumping all databases.");
+			
 		}
 		else {
 			$this->write("\tStart injecting dumps in databases.");
+			
 		}
 		$this->manageDumps($dbs,$prefix,$folder,$this->export);
 	}
@@ -101,9 +62,11 @@ class Task_DumpDBs extends eZMigrationTask {
 	}
 	
 	
+	
+	
 	function manageDumps($dbs,$prefix = "dump_",$folder = "var/dump",$export){
 		
-		$datas['fields'] = array("{mysqlPath}","{migrationDbDumpFolder}","{migrationDbDumpPrefix}", "{usr}","{pwd}", "{hostname}","{dbname}");
+		$datas['fields'] = array("{mysqlPath}","{migrationDbDumpFolder}","{migrationDbDumpPrefix}", "{usr}","{pwd}","{host}","{dbname}");
 		$datas['values'] = array($this->mysqlPath,$folder,$prefix);
 		
 		$message = "";
@@ -114,9 +77,24 @@ class Task_DumpDBs extends eZMigrationTask {
 			$message = "\tInjecting dump into : ";
 		}
 		
-		$this->loopDataOnScript($dbs,$this->dumpScript($export),$datas,array("User","Password","Server","Database"),false,false,"Gestion des dumps",$message);
+		$this->loopDataOnScript($dbs,$this->dumpScript($export),$datas,array("User","Password","Server","Database"),false,false,"Gestion des dumps",$message,"{dbname}");
 		
 	}
+	
+	function upgradeDBS($dbs){
+		$this->write("\tStart upgrading all databases.");
+		$datas['fields'] = array("{mysqlPath}", "{usr}","{pwd}","{host}","{dbname}","{sqlScript}");
+		$datas['values'] = array($this->mysqlPath);
+		$this->loopDataOnScript($dbs,self::$RUN_SQL_SCRIPT,$datas,array("User","Password","Server","Database"),true,$this->dataSet['Scripts']['MysqlScripts'],"Upgrade databases","Upgrading database : ","{dbname}");
+		
+	}
+	
+	/*function execute($data,$script){
+		$result = false;
+		echo "executing : ".str_replace($data['fields'],$data['values'],$script)."\n";
+		passthru(str_replace($data['fields'],$data['values'],$script),$result);
+		return $result;
+	}*/
 	
 }
 	

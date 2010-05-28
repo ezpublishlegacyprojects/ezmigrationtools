@@ -25,7 +25,8 @@ class Task_ApplyPHPScripts extends eZMigrationTask {
 		
 		$datas = array('fields' => array('{PHPPath}','{siteaccess}','{sqlScript}'),
 					   'values' => array($this->phpPath));
-		$this->loopDataOnScript($siteAccesses,self::$RUN_PHP_SCRIPT,$datas,true,true,$scripts,"Runings php scripts on siteaccesses","runing on",false);
+		
+		$this->loopDataOnScript($siteAccesses,self::$RUN_PHP_SCRIPT,$datas,true,true,$scripts,"Runings php scripts on siteaccesses","runing on","{siteaccess}");
 	
 		return true;
 	}

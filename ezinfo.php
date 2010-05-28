@@ -1,7 +1,7 @@
 <?php
 //
 // SOFTWARE NAME: eZ Migration Tools
-// SOFTWARE RELEASE: 0.1
+// SOFTWARE RELEASE: 1.0
 // COPYRIGHT NOTICE: Jean-Luc Chassaing
 // SOFTWARE LICENSE: GNU General Public License v2.0
 // NOTICE: >
@@ -21,14 +21,14 @@
 //
 //
 
-class ezoeInfo
+class ezmigrationtoolsInfo
 {
     static function info()
     {
         $eZCopyrightString = 'Copyright (C) 1999-' . date('Y') . ' Jean-Luc Chassaing';
 
         return array( 'Name'      => 'eZ Migration Tool',
-                      'Version'   => '0.1',
+                      'Version'   => '1.0',
                       'Copyright' => $eZCopyrightString,
                       'License'   => 'GNU General Public License v2.0' );
     }

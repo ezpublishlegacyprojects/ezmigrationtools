@@ -42,7 +42,29 @@ class eZMigrationTask {
 	 *
 	 * @var string
 	 */
-	protected   $title;
+	protected $title;
+	
+	/**
+	 * Set if the task will be run as test
+	 * 
+	 * @var $testMode boolean
+	 */
+	private $testMode;
+	
+	/**
+	 * Static value to perform as test
+	 */
+	const RUN_AS_TEST = true;
+	
+	/**
+	 * satic value tu perform as word
+	 */
+	const RUN_AS_WORK = false;
+	
+	/**
+	 * @var $loopMessage string 
+	 */
+	private $loopMessage;
 	
 	/**
 	 * getTitle() return the task title
@@ -69,10 +91,28 @@ class eZMigrationTask {
 	 * @param string $message
 	 */
 	function write($message){
-		$mig = eZMigrator::getInstance();
-		$mig->write($message);
+		eZMigrator::$out->outputLine($message);
 	}
 	
+	
+	/**
+	 * setTestMode sets the mode in witch the task will be run
+	 * 
+	 * @param $mode boolean run as test if true
+	 */
+	function setTestMode($mode = self::RUN_AS_WORK ){
+		$this->testMode = $mode;
+	}
+	
+	/**
+	 * class constructor
+	 * 
+	 * @param $mode boolean 
+	 */
+	function __construct($mode = self::RUN_AS_WORK ){
+		$this->setTestMode($mode);
+		$this->loopMessage= "";
+	}
 	
 	/**
 	 * sets The task title 
@@ -81,7 +121,7 @@ class eZMigrationTask {
 	 */
 	function setTitle($title = ""){
 		if ($title == ""){
-			$this->title = "Tache de migration ". __CLASS__ ." : ";
+			$this->title = "Migration task ". __CLASS__ ." : ";
 		}
 		else {
 			$this->title = $title;
@@ -130,52 +170,63 @@ class eZMigrationTask {
 	 * @param array $datas 
 	 * @param mixed $specificField1 
 	 * @param mixed $specificField2
-	 * @param array $loopArray2
+	 * @param array $loopArray2 second set of data
 	 * @param string $mainmessage
 	 * @param string $loopMessage
-	 * @param boolean $testMode
+	 * @param string $messageField field used to build the message displayed
+	 * 
 	 * @return boolean
 	 */
 
-	function loopDataOnScript($loopArray,$scriptPatern,$datas,$specificField1 = false,$specificField2 = false,$loopArray2 = false,$mainmessage = "", $loopMessage = "",$testMode = false){
+	function loopDataOnScript($loopArray,$scriptPatern,$datas,$specificField1 = false,$specificField2 = false,$loopArray2 = false,$mainmessage = "", $loopMessage = "",$messageField){
+		
+		if ($this->loopMessage == ""){
+			$this->loopMessage = $loopMessage;
+		}
 		$this->write($mainmessage);
+		// saving datas on wich the scipts will be executed
 		$execDatas = $datas;
 		
+		// Get the id of the next value to be set
 		$specificValueFieldId = count($datas['values']);
 		
-		$MessageField = "";
+		$Message = "";
 		foreach ($loopArray as $item) {
 			$startId = $specificValueFieldId;
-			//$loopMessage = "";
 			if ($specificField1){
 				   if (is_array($specificField1)){
 					   	foreach ($specificField1 as $field){
 					   			$execDatas['values'][$startId] = $item[$field];
-					   			$MessageField = $item[$field];
 					   			$startId++;
 					   	}	
 				   }
 				   else if (is_string($specificField1)) {
 					$execDatas['values'][$startId] = $item[$specificField1];
-					$MessageField = $specificField1;
+					
 				   }
 				   else if(is_bool($specificField1)){
 				   	$execDatas['values'][$startId] = $item;
+				  
 				   }
-					if ($specificField2) {
-						$loopMessage.= " ". $MessageField;
-					}
-					else {
-						$this->write($loopMessage." ".$MessageField);
-					}
+				    
+					
 			}
 			if (is_array($loopArray2)){
-				$this->loopDataOnScript($loopArray2,$scriptPatern,$execDatas,$specificField2,false,false,"",$loopMessage,$testMode);
+				
+				$this->loopDataOnScript($loopArray2,$scriptPatern,$execDatas,$specificField2,false,false,"",$loopMessage,$messageField);
 			}
 			else {
 				
+				$message = $this->loopMessage;
+				foreach($execDatas['fields'] as $key=>$value){
+					if ($value == $messageField){
+						$message .= " ".$execDatas['values'][$key];
+					}
+					
+				}
+				$this->write($message);
 				
-				$this->execute($execDatas,$scriptPatern,$testMode);
+				$this->execute($execDatas,$scriptPatern);
 			}
 		}
 		
@@ -191,14 +242,16 @@ class eZMigrationTask {
 	 * @param boolean $test
 	 * @return boolean
 	 */
-	function execute($data,$script,$test = false){
+	function execute($data,$script,$message = ""){
 		$result = false;
-		
-		if ($test){
+		if ($message == ""){
+			$message = "executing : ".str_replace($data['fields'],$data['values'],$script);
+		}
+		$this->write($message);
+		if ($this->testMode == self::RUN_AS_TEST){
 			$this->write("USING TEST MODE NO EXECUTION");
 		}
-		$this->write("executing : ".str_replace($data['fields'],$data['values'],$script));
-		if (!$test){
+		else{
 			passthru(str_replace($data['fields'],$data['values'],$script),$result);
 		}
 		return $result;

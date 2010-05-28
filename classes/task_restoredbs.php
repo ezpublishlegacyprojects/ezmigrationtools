@@ -3,6 +3,7 @@
 class Task_RestoreDBs extends eZMigrationTask {
 
 	function __construct(){
+		
 		$this->setTitle("Databases restoration : ");
 	}
 	
@@ -15,9 +16,11 @@ class Task_RestoreDBs extends eZMigrationTask {
 	    require_once "task_dumpdbs.php";
 		$dumptAsk = new Task_DumpDBs();
 		return $dumptAsk->run($dataSet);
+		
 	}
 	
 	function emptyDatabases($dbs){
+		
 		$reconnect = false;
 		$connectionParams = array("User"=>"","Password"=>"","Server"=>"localhost","Port"=>"");
 		$db = false;
@@ -74,7 +77,10 @@ class Task_RestoreDBs extends eZMigrationTask {
 					if ($dropResult){
 						echo "All tables droped ! \n";
 					}
-						
+					
+					
+					
+					
 					
 				}
 				catch(Exception $e){

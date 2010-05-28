@@ -1,5 +1,5 @@
 <?php
-//
+
 // Definition of eZMigrator class
 //
 // Created on: <17-Apr-2002 09:15:27 bf>
@@ -46,6 +46,7 @@ class eZMigrator {
 	static $MODE_WEB = "web";
 	static $MODE_CLI = "cli";
 	static $INI_FILE = "extension/ezmigrationtools/settings/migration.ini";
+	static $out;
 	
 	/**
 	 * Display text
@@ -57,7 +58,8 @@ class eZMigrator {
 			echo "<p>" . $message ."</p>";
 		}
 		else if ($this->mode == self::$MODE_CLI){
-			$this->cli->output($message);
+			//$this->cli->output($message);
+			self::$out->outputLine($message);
 		}
 	}
 	
@@ -75,13 +77,19 @@ class eZMigrator {
 	 	}	
 	}
 	
+	private function eZMigrator(){
+		self::$out = new ezcConsoleOutput();
+		$this->setMode(self::$MODE_CLI);
+		$this->scriptInit();
+		
+	}
+	
 	/**
 	 * set mode client mode or other acutaly only the client mode works
 	 *
 	 * @param string $mode
-	 */
+	*/
 	function setMode($mode){
-		
 		if ($mode == self::$MODE_CLI or $mode == self::$MODE_WEB){
 				$this->mode = $mode;
 			}
@@ -91,7 +99,7 @@ class eZMigrator {
 		if ($this->mode == self::$MODE_CLI){
 			$this->scriptInit();
 		}
-	}
+	} 
 	
 	
 	/**
@@ -100,14 +108,15 @@ class eZMigrator {
 	 */
 	function start(){
 		if (isset($this->mode)){
-			echo("Initialisation \n");
+			//echo("Initialisation \n");
+			self::$out->outputLine("Initialisation");
 			//$this->scriptInit();
-			$this->write("\tRécuperation liste des bases.");
+			$this->write("\tLoad database settings.");
 			$this->dataSet["DBList"] = $this->loadDBSettings();
-			$this->write("\tRécuperation liste des tâches.");
+			$this->write("\tLoading task list.");
 			$this->tasks = $this->loadAvailableTasks(); 
 			$this->currentTaskID = -1;
-			$this->write("Fin initialisation");
+			$this->write("Migrator ready");
 			}
 			else {
 				echo "Please set Mode First";
@@ -147,13 +156,14 @@ class eZMigrator {
 	function runNextStep(){
 		
 		$taskID = $this->currentTaskID + 1;
-		$taskName = "Task_".$this->tasks[$taskID];
+		$taskName = "Task_".$this->tasks[$taskID]["taskClassName"];
 		$fileName = strtolower($taskName).".php";
 		$result = false;
 		if (file_exists(dirname(__FILE__)."/". $fileName)){
 			require_once $fileName;
 			$task = new $taskName();
 			$this->write($task->getTitle());
+			$task->setTestMode(eZMigrationTask::RUN_AS_TEST);
 			$result = $task->run($this->dataSet);
 		}
 		if ($result){
@@ -166,28 +176,21 @@ class eZMigrator {
 	
 	
 	
-	function promptNextStep($question = "Goto next step"){
-		$input = $this->askQuestion($question." (y/n) ? ");
-		if ($input != 'y'){
-			$this->endScript();
-		}
-		else {
+	function promptNextStep($questionString = "Goto next step"){
+		$taskID = $this->currentTaskID + 1;
+		$sNextStepTitle = $this->tasks[$taskID]["taskTitle"];
+		$question = new ezcConsoleQuestionDialog(self::$out);
+		$question->options->text = "$questionString : $sNextStepTitle ?";
+		$question->options->showResults = true;
+		$question->options->validator = new ezcConsoleQuestionDialogCollectionValidator(array("y","n"),"y",ezcConsoleQuestionDialogCollectionValidator::CONVERT_LOWER);
+		if (ezcConsoleDialogViewer::displayDialog($question) === "y"){
 			return true;
 		}
-		
+		else {
+			$this->endScript();
+		}
 	}
 	
-	function askQuestion($question){
-		fwrite(STDOUT,$question);
-		return $this->getCharTyped();
-	}
-	
-	function getCharTyped(){
-		do{
-			$input = fgetc(STDIN);
-		}while (trim($input) == '');
-			return $input;
-	}
 	
 	function getMigrationVersionList(){
 		$ini = eZINI::fetchFromFile(self::$INI_FILE);
@@ -198,25 +201,49 @@ class eZMigrator {
 		return $migrationList;
 	}
 	
+	/**
+	 * Display the available migrations so that the user can select the one he wants to play
+	 */
 	function selectMigrationVersion(){
 		$ini = eZINI::fetchFromFile(self::$INI_FILE);
 		$migrationList = $ini->variable("VersionMigration","AvailableVersions");
-		$this->write("Choose the version migration you mant to proceed : ");
+		
+		$question = new ezcConsoleQuestionDialog(self::$out);
+		
+		
+		self::$out->outputLine("Choose the version migration you want to proceed : ");
+		$aOptions = array_keys($migrationList);
 		foreach ($migrationList as $key=>$item) {
 			$migrationList[$key] = split(";",$item);
 			$this->write("$key -> {$migrationList[$key][0]}");
 		}
-		$char = $this->askQuestion("Type the id number : ");
 		
-		$this->dataSet["Scripts"] = $ini->group("Version".$migrationList[$char][1]);
+		$question->options->text = "Type the id number :";
+		$question->options->showResults = true;
+		$question->options->validator = new ezcConsoleQuestionDialogCollectionValidator($aOptions);
+		$iSelectedOption = ezcConsoleDialogViewer::displayDialog($question);
+		
+		
+		//$char = $this->askQuestion("Type the id number : ");
+		
+		$this->dataSet["Scripts"] = $ini->group("Version".$migrationList[$iSelectedOption][1]);
 	}
 	
+	
+	/**
+	 * Close the script session
+	 *
+	 */
 	function endScript(){
 		if ($this->mode == self::$MODE_CLI){
 			$this->script->shutdown( 0 );
 		}
 	}
 	
+	/**
+	 * scriptInit  sets the eZCLI Instance 
+	 *
+	 */
 	function scriptInit(){
 		if ($this->mode == self::$MODE_CLI){
 			$this->cli = eZCLI::instance();
@@ -235,6 +262,11 @@ class eZMigrator {
 		
 	}
 	
+	/**
+	 * Retrieves the all the differente database settings from the different siteaccess 
+	 * configuration files.
+	 * return Array
+	 */
 	function loadDBSettings(){
 		$ini = eZINI::instance();
 		$SiteAccessList = $ini->variable("SiteAccessSettings","AvailableSiteAccessList");
@@ -260,11 +292,20 @@ class eZMigrator {
 		
 	}
 	
+	/**
+	 * Load the task list from the ini file
+	 * return Array
+	 */
 	function loadAvailableTasks(){
 		$ini = eZINI::fetchFromFile(self::$INI_FILE);
 		$aTaskList = $ini->variable("MigrationTasks","TaskList");
+		$aTasks = array();
 		if (is_array($aTaskList)){
-			return $aTaskList;
+			foreach ($aTaskList as $item){
+				$temp = split(";",$item);
+				$aTasks[]=array("taskClassName" => $temp[0], "taskTitle"=>$temp[1]);
+			}
+			return $aTasks;
 		}
 		else {
 			return FALSE;
