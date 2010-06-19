@@ -41,11 +41,16 @@ class eZMigrator {
 	private $tasks;
 	private $currentTaskID;
 	private $mode;
+	
+	private $runAsDegug;
+	private $dumpDBS;
 	static $instance;
+	
 	
 	static $MODE_WEB = "web";
 	static $MODE_CLI = "cli";
-	static $INI_FILE = "extension/ezmigrationtools/settings/migration.ini";
+	static $INI_FILE = "migration.ini";
+	static $INI_PATH = "extension/ezmigrationtools/settings";
 	static $out;
 	
 	/**
@@ -108,20 +113,82 @@ class eZMigrator {
 	 */
 	function start(){
 		if (isset($this->mode)){
-			//echo("Initialisation \n");
-			self::$out->outputLine("Initialisation");
-			//$this->scriptInit();
-			$this->write("\tLoad database settings.");
-			$this->dataSet["DBList"] = $this->loadDBSettings();
-			$this->write("\tLoading task list.");
-			$this->tasks = $this->loadAvailableTasks(); 
-			$this->currentTaskID = -1;
-			$this->write("Migrator ready");
+
+			if ($this->manageOptions()){
+			    if ($this->runAsDegug){
+			    	$this->write("Runing in debug mode");
+			    }
+				$this->write("Initialisation");
+				
+				$this->write("\tLoad database settings.");
+				$this->dataSet["DBList"] = $this->loadDBSettings();
+				$this->write("\tLoading task list.");
+				$this->tasks = $this->loadAvailableTasks(); 
+				$this->currentTaskID = -1;
+				$this->write("Migrator ready");
 			}
 			else {
-				echo "Please set Mode First";
+				$this->endScript();
 			}
+		}
+		else {
+				$this->write( "Please set Mode First");
+		}
+		
+	}
 	
+	
+	/**
+	 * ManageOptions function manages the option passed when calling the script
+	 * h, help displays the help content with all the options
+	 * d, debug this options can active the debug mod, in this case the scripts 
+	 * 			are not executed
+	 * x, nodump prenvents the databases dumping script to be executed
+	 * @return boolean
+	 * 	return true if the script execution must be stoped.
+	 */
+	function manageOptions(){
+		$input = new ezcConsoleInput();
+		$helpOption = $input->registerOption(new ezcConsoleOption('h','help'));
+		$debugOption = $input->registerOption(new ezcConsoleOption('d','debug'));
+		$dumpOption = $input->registerOption(new ezcConsoleOption('x','nodump'));
+		
+		$helpOption->shorthelp = "Display help";
+		$debugOption->shorthelp = "Activate the debug mode";
+		$dumpOption->shorthelp = "if set the dump action will not be performed";
+		
+		try{
+			$input->process();
+		}catch (ezcConsoleOptionException $e){
+			die($e->getMessage());
+			return false;
+		}
+		
+		if ($helpOption->value === true){
+			$this->write("");
+			$this->write($input->getSynopsis());
+			foreach ($input->getOptions() as $option) {
+				$this->write("-{$option->short}/{$option->long}: {$option->shorthelp}");
+			
+			}
+			return false;
+		}
+		
+		if ($debugOption->value === true){
+			$this->runAsDegug = eZMigrationTask::RUN_AS_TEST;
+		}
+		else {
+			$this->runAsDegug = eZMigrationTask::RUN_AS_WORK;
+		}
+		
+		if ($dumpOption->value === true){
+			$this->dumpDBS = false;	
+		}
+		else {
+			$this->dumpDBS = true;
+		}
+		return true;
+		
 	}
 	
 	/**
@@ -130,12 +197,15 @@ class eZMigrator {
 	 */
 	function run(){
 		$this->write("Stating process");
-		$this->selectMigrationVersion();
-		while($this->hasNextStep() && $this->promptNextStep()){
-			$this->write("********************************************************************************");
-			$this->runNextStep();
+		if ($this->selectMigrationVersion()){
+			
+			while($this->hasNextStep() && $this->promptNextStep()){
+				$this->write("********************************************************************************");
+				$this->runNextStep();
+			}
+			$this->endScript();	
 		}
-		$this->endScript();
+		
 	}
 	
 	
@@ -163,7 +233,7 @@ class eZMigrator {
 			require_once $fileName;
 			$task = new $taskName();
 			$this->write($task->getTitle());
-			$task->setTestMode(eZMigrationTask::RUN_AS_TEST);
+			$task->setTestMode($this->runAsDegug);
 			$result = $task->run($this->dataSet);
 		}
 		if ($result){
@@ -182,18 +252,26 @@ class eZMigrator {
 		$question = new ezcConsoleQuestionDialog(self::$out);
 		$question->options->text = "$questionString : $sNextStepTitle ?";
 		$question->options->showResults = true;
-		$question->options->validator = new ezcConsoleQuestionDialogCollectionValidator(array("y","n"),"y",ezcConsoleQuestionDialogCollectionValidator::CONVERT_LOWER);
-		if (ezcConsoleDialogViewer::displayDialog($question) === "y"){
+		$question->options->validator = new ezcConsoleQuestionDialogCollectionValidator(array("y","n","s","a"),"y",ezcConsoleQuestionDialogCollectionValidator::CONVERT_LOWER);
+		$result = ezcConsoleDialogViewer::displayDialog($question);
+		if ($result === "y"){
 			return true;
 		}
-		else {
-			$this->endScript();
+		elseif ($result === "s" ){
+			$this->currentTaskID++;
+			$this->promptNextStep();
+			
 		}
+		else{
+			$this->endScript();
+			return false;
+		} 
 	}
 	
 	
 	function getMigrationVersionList(){
-		$ini = eZINI::fetchFromFile(self::$INI_FILE);
+		
+		$ini = eZINI::instance(self::$INI_FILE,self::$INI_PATH);
 		$migrationList = $ini->variable("VersionMigration","AvailableVersions");
 		foreach ($migrationList as $key=>$item) {
 			$migrationList[$key] = split(";",$item);
@@ -205,28 +283,38 @@ class eZMigrator {
 	 * Display the available migrations so that the user can select the one he wants to play
 	 */
 	function selectMigrationVersion(){
-		$ini = eZINI::fetchFromFile(self::$INI_FILE);
-		$migrationList = $ini->variable("VersionMigration","AvailableVersions");
 		
+		$migrationList = $this->getMigrationVersionList();
 		$question = new ezcConsoleQuestionDialog(self::$out);
 		
 		
 		self::$out->outputLine("Choose the version migration you want to proceed : ");
 		$aOptions = array_keys($migrationList);
 		foreach ($migrationList as $key=>$item) {
-			$migrationList[$key] = split(";",$item);
-			$this->write("$key -> {$migrationList[$key][0]}");
+			$this->write("$key -> {$item[0]}");
 		}
+		$this->write("q or Q -> quit");
+		$aOptions[]="q";
+		$aOptions[]="Q";
 		
 		$question->options->text = "Type the id number :";
 		$question->options->showResults = true;
 		$question->options->validator = new ezcConsoleQuestionDialogCollectionValidator($aOptions);
 		$iSelectedOption = ezcConsoleDialogViewer::displayDialog($question);
 		
-		
+		$iSelectedOption = strtolower($iSelectedOption);
 		//$char = $this->askQuestion("Type the id number : ");
 		
-		$this->dataSet["Scripts"] = $ini->group("Version".$migrationList[$iSelectedOption][1]);
+		if ($iSelectedOption != "q" ){
+			$ini = eZINI::instance(self::$INI_FILE,self::$INI_PATH);
+			$this->dataSet["Scripts"] = $ini->group("Version".$migrationList[$iSelectedOption][1]);
+			return true;
+		}
+		else {
+			// exection is aborted
+			$this->endScript();
+			return false;
+		}
 	}
 	
 	
@@ -235,8 +323,10 @@ class eZMigrator {
 	 *
 	 */
 	function endScript(){
+		$this->write("End of script");
 		if ($this->mode == self::$MODE_CLI){
 			$this->script->shutdown( 0 );
+			
 		}
 	}
 	
@@ -297,19 +387,35 @@ class eZMigrator {
 	 * return Array
 	 */
 	function loadAvailableTasks(){
-		$ini = eZINI::fetchFromFile(self::$INI_FILE);
-		$aTaskList = $ini->variable("MigrationTasks","TaskList");
-		$aTasks = array();
-		if (is_array($aTaskList)){
-			foreach ($aTaskList as $item){
-				$temp = split(";",$item);
-				$aTasks[]=array("taskClassName" => $temp[0], "taskTitle"=>$temp[1]);
+		$ini = eZINI::instance(self::$INI_FILE,self::$INI_PATH);
+		if ($ini->hasVariable("MigrationTasks","TaskList")){
+			$aTaskList = $ini->variable("MigrationTasks","TaskList");
+			$aTasks = array();
+			if (is_array($aTaskList)){
+				foreach ($aTaskList as $item){
+					$temp = split(";",$item);
+					if ($temp[0] == "DumpDBs"){
+						if ($this->dumpDBS){
+						
+							$aTasks[]=array("taskClassName" => $temp[0], "taskTitle"=>$temp[1]);
+						} 
+					}
+					else {
+						$aTasks[]=array("taskClassName" => $temp[0], "taskTitle"=>$temp[1]);
+					}
+				}
+				return $aTasks;
 			}
-			return $aTasks;
+			else {
+				return FALSE;
+			}
 		}
 		else {
-			return FALSE;
+			$this->write("Error, the MigrationTasks group is not correctly defined in the ".self::$INI_FILE ."file, TaskList not found");
+			return false;
 		}
+	
+		
 		
 	}
 	

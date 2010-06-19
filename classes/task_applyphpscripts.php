@@ -14,7 +14,7 @@ class Task_ApplyPHPScripts extends eZMigrationTask {
 	}
 	
 	function run(& $dataSet){
-		$ini = eZINI::fetchFromFile(eZMigrator::$INI_FILE);
+		$ini = eZINI::instance(eZMigrator::$INI_FILE,eZMigrator::$INI_PATH);
         $this->phpPath = $ini->variable("DBMigrationSettings", "PHPScriptPath");
 		return $this->runPhpScripts(array_keys($dataSet["DBList"]),$dataSet['Scripts']['phpScripts']);
 	}

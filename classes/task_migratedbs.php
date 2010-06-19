@@ -14,7 +14,7 @@ class Task_MigrateDBs extends eZMigrationTask {
 	}
 	
 	function run(& $dataSet){
-		$ini = eZINI::fetchFromFile(eZMigrator::$INI_FILE);
+		$ini = eZINI::instance(eZMigrator::$INI_FILE,eZMigrator::$INI_PATH);
         $this->mysqlPath = $ini->variable("DBMigrationSettings", "MysqlPath");
 		return $this->upgradeDBS($dataSet["DBList"],$dataSet['Scripts']['MysqlScripts']);
 	}

@@ -5,8 +5,6 @@ class Task_DumpDBs extends eZMigrationTask {
 	
 	static $DUMP = "{mysqlPath}mysqldump -u{usr} -h {host} -p{pwd} --default_character_set utf8 {dbname} > {migrationDbDumpFolder}/{migrationDbDumpPrefix}{dbname}.sql";
 	
-	
-	
 	private $mysqlPath;
 	private $export;
 	
@@ -22,7 +20,7 @@ class Task_DumpDBs extends eZMigrationTask {
 	    else {
 	    	$this->export = true;
 	    }
-		$ini = eZINI::fetchFromFile(eZMigrator::$INI_FILE);
+		$ini = eZINI::instance(eZMigrator::$INI_FILE,eZMigrator::$INI_PATH);
 		$dbDumpPrefix = "";
 		$dbDumpFolder = "";
 		$doDumpBeforeUpgrade = $ini->variable("DBMigrationSettings","DumpDbBeforeUpgrade");
@@ -87,19 +85,7 @@ class Task_DumpDBs extends eZMigrationTask {
 		$datas['values'] = array($this->mysqlPath);
 		$this->loopDataOnScript($dbs,self::$RUN_SQL_SCRIPT,$datas,array("User","Password","Server","Database"),true,$this->dataSet['Scripts']['MysqlScripts'],"Upgrade databases","Upgrading database : ","{dbname}");
 		
-	}
-	
-	/*function execute($data,$script){
-		$result = false;
-		echo "executing : ".str_replace($data['fields'],$data['values'],$script)."\n";
-		passthru(str_replace($data['fields'],$data['values'],$script),$result);
-		return $result;
-	}*/
-	
+	}	
 }
-	
-	
-		
-
 
 ?>
